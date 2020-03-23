@@ -1,17 +1,18 @@
+mod player;
+
 use anyhow::Result;
 use enumset::{EnumSet, EnumSetType};
+use player::traits::{Player};
+use player::dumb_player::{DumbPlayer};
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::mem;
-// use std::io;
 
-const MAX_CARDS: u8 = 2;
 const STARTING_COINS: u8 = 2;
 const STARTING_LIVES: u8 = 1;
 
 #[derive(Debug)]
-enum Action {
+pub enum Action {
     Income,
     ForeignAid,
     Tax,
@@ -44,11 +45,11 @@ impl Action {
 // Game change turns
 // Every Player
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-struct PlayerID(u8);
+pub struct PlayerID(u8);
 
 // Holds internal state about the current game
 #[derive(Debug)]
-struct GameState {
+pub struct GameState {
     // TODO = Convenience Cache consider removing
     active_players: Vec<PlayerID>,
     num_cards: u8,
@@ -57,7 +58,7 @@ struct GameState {
     // history -> Vec of Turns?
 }
 
-struct GameDriver {
+pub struct GameDriver {
     field: GameField,
     // Need to be stored?
     // Do I need to make static / store playerID to player map
@@ -65,14 +66,14 @@ struct GameDriver {
     players: HashMap<PlayerID, Box<dyn Player>>,
 }
 
-struct Game {
+pub struct Game {
     driver: GameDriver,
     state: GameState,
 }
 
 impl Game {
     // Will need to decide on how to assign players / who is playing
-    fn new(identities: EnumSet<Identity>, num_players: u8) -> Self {
+    pub fn new(identities: EnumSet<Identity>, num_players: u8) -> Self {
         // TODO -> Yuck panic on 0?
         let num_cards = match num_players {
             1..=4 => 3,
@@ -112,7 +113,7 @@ impl Game {
         }
     }
 
-    fn play(&mut self) {
+    pub fn play(&mut self) {
         // Give everyone one turn
         // TODO - Establish turn order -> Roll for it? Then clockwise?
         // Find a way not to do this twice
@@ -238,14 +239,14 @@ impl GameDriver {
 
 // This is public information about a player
 #[derive(Debug)]
-struct PlayerState {
+pub struct PlayerState {
     lost_lives: Vec<Identity>,
     num_coins: u8,
     num_lives: u8,
 }
 
 impl PlayerState {
-    fn new(num_lives: u8) -> Self {
+    pub fn new(num_lives: u8) -> Self {
         let lost_lives = Vec::new();
         Self {
             num_coins: STARTING_COINS,
@@ -253,55 +254,15 @@ impl PlayerState {
             lost_lives,
         }
     }
-    fn is_alive(&self) -> bool {
+    pub fn is_alive(&self) -> bool {
         self.num_lives > 0
     }
 }
 
-trait Player {
-    fn choose_action(&self, state: &GameState) -> Action;
-    fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool;
-    fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool;
-    fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> usize;
-
-    // Utility functions on player state
-    fn get_hand(&self) -> Vec<Identity>;
-    fn set_hand(&mut self, hand: Vec<Identity>);
-    fn who_am_i(&self) -> &PlayerID;
-    fn discard_identity(&mut self, state: &GameState) -> Identity;
-
-    // Start built-in functions
-    fn replace_card(&mut self, to_replace: usize, card: Identity) {
-	let mut hand = self.get_hand();
-	mem::replace(&mut hand[to_replace], card.clone());
-	self.set_hand(hand);
-    }
-    
-    fn hand_full(&self) -> bool {
-	self.get_hand().len()>= MAX_CARDS.try_into().unwrap()
-    }
-    
-    fn count_coins(&self, state: &GameState) -> u8 {
-        let player_state = state.player_states.get(self.who_am_i()).unwrap();
-        player_state.num_coins.clone()
-    }
-
-    fn take_card(&mut self, state: &GameState, card: Identity) {
-        // Yeah this is silly
-        if self.hand_full() {
-            let to_replace = self.choose_card_to_replace(state, &card);
-            self.replace_card(to_replace, card);
-        } else {
-	    let mut hand = self.get_hand();
-	    hand.push(card);
-            self.set_hand(hand);
-        }
-    }
-}
 
 // Can be used for cards as well?
 #[derive(Debug, EnumSetType)]
-enum Identity {
+pub enum Identity {
     Ambassador,
     Assassin,
     Contessa,
@@ -310,7 +271,7 @@ enum Identity {
     Duke,
 }
 
-struct GameField {
+pub struct GameField {
     deck: Vec<Identity>,
 }
 
@@ -323,74 +284,6 @@ impl GameField {
             }
         }
         Self { deck }
-    }
-}
-
-struct DumbPlayer {
-    // Not necessarily two?
-    id: PlayerID,
-    hand: Vec<Identity>,
-}
-
-impl DumbPlayer {
-    fn new(id: PlayerID) -> Self {
-        let hand = Vec::new();
-        DumbPlayer { id, hand }
-    }
-}
-
-impl Player for DumbPlayer {
-    fn choose_action(&self, state: &GameState) -> Action {
-        if self.count_coins(state) < 10 {
-            Action::Income
-        } else {
-            // Need to choose player? for coup?
-            // choose player after you in order
-            // Lol Jank
-            for player_id in &state.active_players {
-                if player_id != self.who_am_i() {
-                    return Action::Coup(player_id.clone());
-                }
-            }
-            panic!("No other players to coup!");
-        }
-    }
-    fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool {
-        false
-    }
-    // How do I show this?
-    fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool {
-        false
-    }
-    // Index in hand to replace
-    fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> usize {
-        0
-    }
-    
-    fn get_hand(&self) -> Vec<Identity> {
-	self.hand.iter().cloned().collect()
-    }
-
-    fn set_hand(&mut self, hand: Vec<Identity>) {
-	self.hand = hand;
-    }
-
-    fn who_am_i(&self) -> &PlayerID {
-        &self.id
-    }
-
-    // TODO Deal with errors better
-    fn discard_identity(&mut self, state: &GameState) -> Identity {
-        let num_cards = self.hand.len();
-        if num_cards > 0 {
-            // TODO Refactor as util function remove from hand --> Can I make
-	    // all traits have hand?
-            let remove_index = num_cards - 1;
-            let removed = self.hand.remove(remove_index);
-            return removed;
-        } else {
-            panic!("Oh God!");
-        }
     }
 }
 
