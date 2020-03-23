@@ -5,6 +5,7 @@ use action::Action;
 use anyhow::Result;
 use enumset::{EnumSet, EnumSetType};
 use player::dumb_player::DumbPlayer;
+use player::human_player::HumanPlayer;
 use player::traits::Player;
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
@@ -271,6 +272,9 @@ fn main() -> Result<()> {
     let num_players = 3;
     let mut game = Game::new(game_identities, num_players);
     game.play();
+
+    // let player = HumanPlayer::new(PlayerID(1));
+    
     // Game Driver code
     // Create Players
 
