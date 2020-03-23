@@ -9,7 +9,7 @@ pub trait Player {
     fn choose_action(&self, state: &GameState) -> Action;
     fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool;
     fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action>;
-    fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> usize;
+    fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> Option<usize>;
     fn choose_card_to_lose(&self, state: &GameState) -> usize;
     
     // Utility functions on player state
@@ -17,8 +17,18 @@ pub trait Player {
     fn set_hand(&mut self, hand: Vec<Identity>);
     fn who_am_i(&self) -> &PlayerID;
 
+    
 
     // Start built-in functions
+    fn lose_challenge(&mut self, state: &GameState) -> Identity {
+	// TODO handle user errors
+	let index = self.choose_card_to_lose(state);
+	match self.discard(index) {
+	    Ok(identity) => identity,
+	    Err(e) => self.lose_challenge(state),
+	}
+    }
+    
     fn replace_card(&mut self, to_replace: usize, card: Identity) {
         let mut hand = self.get_hand();
         mem::replace(&mut hand[to_replace], card.clone());
@@ -37,8 +47,9 @@ pub trait Player {
     fn take_card(&mut self, state: &GameState, card: Identity) {
         // Yeah this is silly
         if self.hand_full() {
-            let to_replace = self.choose_card_to_replace(state, &card);
-            self.replace_card(to_replace, card);
+	    if let Some(to_replace) = self.choose_card_to_replace(state, &card) {
+		self.replace_card(to_replace, card);
+	    }
         } else {
             let mut hand = self.get_hand();
             hand.push(card);
@@ -60,7 +71,7 @@ pub trait Player {
     // I would prefer this translation be in action but this is more flexible for
     // embezzlement
     // Maybe not actually
-    fn can_do_action(&self, action: Action) -> bool {
+    fn can_do_action(&self, action: &Action) -> bool {
 	match action {
 	    Action::Income | Action::ForeignAid | Action::Coup(..) => true,
 	    Action::Assassinate(..) => self.has_identity(Identity::Assassin),

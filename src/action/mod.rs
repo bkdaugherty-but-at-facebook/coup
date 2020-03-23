@@ -1,6 +1,6 @@
 use crate::PlayerID;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Action {
     Income,
     ForeignAid,

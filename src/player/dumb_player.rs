@@ -38,8 +38,8 @@ impl Player for DumbPlayer {
 	None
     }
     // Index in hand to replace
-    fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> usize {
-        0
+    fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> Option<usize> {
+	None
     }
 
     fn choose_card_to_lose(&self, state: &GameState) -> usize {
