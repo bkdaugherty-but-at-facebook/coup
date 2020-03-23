@@ -1,46 +1,19 @@
+mod action;
 mod player;
 
+use action::Action;
 use anyhow::Result;
 use enumset::{EnumSet, EnumSetType};
-use player::traits::{Player};
-use player::dumb_player::{DumbPlayer};
+use player::dumb_player::DumbPlayer;
+use player::traits::Player;
 use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
+// TODO Max cards needs to sit with this
+const STARTING_CARDS: u8 = 2;
 const STARTING_COINS: u8 = 2;
-const STARTING_LIVES: u8 = 1;
-
-#[derive(Debug)]
-pub enum Action {
-    Income,
-    ForeignAid,
-    Tax,
-    Assassinate(PlayerID),
-    Coup(PlayerID),
-    Exchange,
-    // BlockForeignAid
-    // BlockAssassination
-}
-
-impl Action {
-    // Dependent on id of target
-    fn blockable(&self, id: &PlayerID) -> bool {
-        match self {
-            Action::Income | Action::Coup(..) | Action::Exchange | Action::Tax => false,
-            // Can only block if they assassinate you
-            Action::Assassinate(target) => target == id,
-            Action::ForeignAid => true,
-        }
-    }
-    // Defines if an action is challengable
-    fn challengable(&self) -> bool {
-        match self {
-            Action::Income | Action::ForeignAid | Action::Coup(..) => false,
-            _ => true,
-        }
-    }
-}
+const STARTING_LIVES: u8 = 2;
 
 // Game change turns
 // Every Player
@@ -102,14 +75,16 @@ impl Game {
         // Get rand iterator over deck
         let mut rng = rand::thread_rng();
 
-        for id in player_order {
-            // TODO Get random iterator over cards and deal
-            let card = Identity::Ambassador; // self.driver.field.deck.into_iter().cloned().choose(&mut rng).clone();
-            self.driver
-                .players
-                .get_mut(&id)
-                .unwrap()
-                .take_card(&self.state, card.clone());
+        for _ in 0..STARTING_CARDS {
+            for id in player_order {
+                // TODO Get random iterator over cards and deal
+                let card = Identity::Ambassador; // self.driver.field.deck.into_iter().cloned().choose(&mut rng).clone();
+                self.driver
+                    .players
+                    .get_mut(&id)
+                    .unwrap()
+                    .take_card(&self.state, card.clone());
+            }
         }
     }
 
@@ -242,6 +217,7 @@ impl GameDriver {
 pub struct PlayerState {
     lost_lives: Vec<Identity>,
     num_coins: u8,
+    // TODO --> Make this sync with deck somehow?
     num_lives: u8,
 }
 
@@ -258,7 +234,6 @@ impl PlayerState {
         self.num_lives > 0
     }
 }
-
 
 // Can be used for cards as well?
 #[derive(Debug, EnumSetType)]
