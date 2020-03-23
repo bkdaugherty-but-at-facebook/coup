@@ -1,5 +1,6 @@
 use crate::{Action, GameState, Identity, PlayerID};
 use crate::player::traits::Player;
+use anyhow::Result;
 
 pub struct DumbPlayer {
     // Not necessarily two?
@@ -33,15 +34,18 @@ impl Player for DumbPlayer {
     fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool {
         false
     }
-    // How do I show this?
-    fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool {
-        false
+    fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action> {
+	None
     }
     // Index in hand to replace
     fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> usize {
         0
     }
 
+    fn choose_card_to_lose(&self, state: &GameState) -> usize {
+	0
+    }
+    
     fn get_hand(&self) -> Vec<Identity> {
         self.hand.iter().cloned().collect()
     }
@@ -54,17 +58,5 @@ impl Player for DumbPlayer {
         &self.id
     }
 
-    // TODO Deal with errors better
-    fn discard_identity(&mut self, state: &GameState) -> Identity {
-        let num_cards = self.hand.len();
-        if num_cards > 0 {
-            // TODO Refactor as util function remove from hand --> Can I make
-            // all traits have hand?
-            let remove_index = num_cards - 1;
-            let removed = self.hand.remove(remove_index);
-            return removed;
-        } else {
-            panic!("Oh God!");
-        }
-    }
+    
 }

@@ -1,20 +1,22 @@
 use crate::{Action, GameState, Identity, PlayerID};
 use std::convert::TryInto;
 use std::mem;
+use anyhow::{anyhow, Result};
 
 const MAX_CARDS: u8 = 2;
 
 pub trait Player {
     fn choose_action(&self, state: &GameState) -> Action;
     fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool;
-    fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool;
+    fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action>;
     fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> usize;
-
+    fn choose_card_to_lose(&self, state: &GameState) -> usize;
+    
     // Utility functions on player state
     fn get_hand(&self) -> Vec<Identity>;
     fn set_hand(&mut self, hand: Vec<Identity>);
     fn who_am_i(&self) -> &PlayerID;
-    fn discard_identity(&mut self, state: &GameState) -> Identity;
+
 
     // Start built-in functions
     fn replace_card(&mut self, to_replace: usize, card: Identity) {
@@ -42,5 +44,34 @@ pub trait Player {
             hand.push(card);
             self.set_hand(hand);
         }
+    }
+    
+    fn discard(&mut self, index: usize) -> Result<Identity> {
+	let mut hand = self.get_hand();
+	if index < hand.len() {
+	    let card = hand.remove(index);
+	    self.set_hand(hand);
+	    Ok(card)
+	} else {
+	    Err(anyhow!("Index out of range - {} of hand {}", index, hand.len()))
+	}
+    }
+
+    // I would prefer this translation be in action but this is more flexible for
+    // embezzlement
+    // Maybe not actually
+    fn can_do_action(&self, action: Action) -> bool {
+	match action {
+	    Action::Income | Action::ForeignAid | Action::Coup(..) => true,
+	    Action::Assassinate(..) => self.has_identity(Identity::Assassin),
+	    Action::Tax => self.has_identity(Identity::Duke),
+	    Action::Exchange => self.has_identity(Identity::Ambassador),
+	    Action::BlockForeignAid => self.has_identity(Identity::Duke),
+	    Action::BlockAssassination => self.has_identity(Identity::Contessa),
+	}
+    }
+
+    fn has_identity(&self, identity: Identity) -> bool {
+	self.get_hand().contains(&identity)
     }
 }

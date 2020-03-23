@@ -1,5 +1,6 @@
 use crate::{Action, GameState, Identity, PlayerID};
 use crate::player::traits::Player;
+use anyhow::{anyhow, Result};
 use std::io::{stdin, stdout, Write};
 use std::str::FromStr;
 use std::fmt::Display;
@@ -7,19 +8,24 @@ use std::fmt::Display;
 pub struct HumanPlayer {
     // Not necessarily two?
     id: PlayerID,
+    prompter: LocalPrompter,
     name: String,
     hand: Vec<Identity>,
 }
 
-impl HumanPlayer {
-    pub fn new(id: PlayerID) -> Self {
-        let hand = Vec::new();
-	let name = HumanPlayer::prompt_player("Please enter your name: ");
-	HumanPlayer { id, name, hand}
-    }
+pub trait Prompter {
+    fn prompt_player(&self, question: &str) -> Result<String>;
+    fn prompt_player_choice<T: Display + FromStr + Clone>(&self, question: &str, possible_choices: Vec<T>) -> Result<T>;
+}
 
-    fn prompt_player(question: &str) -> String {
-	print!("{}", question);
+struct LocalPrompter {}
+
+impl LocalPrompter {
+    fn new() -> Self {
+	LocalPrompter{}
+    }
+    
+    fn get_response(&self) -> Result<String> {
 	let mut response = String::new();
 	let _ = stdout().flush();
 	stdin().read_line(&mut response).expect("Did not enter a correct string");
@@ -29,11 +35,42 @@ impl HumanPlayer {
 	if let Some('\r')= response.chars().next_back() {
             response.pop();
 	}
-	return response;
+	Ok(response)
+    }
+}
+
+impl Prompter for LocalPrompter {
+    fn prompt_player(&self, question: &str) -> Result<String> {
+	print!("{}", question);
+	self.get_response()
     }
 
-    fn prompt_player_choice<T: Display + FromStr + Clone>(question: &str, possible_choices: Vec<T>) -> T {
-	possible_choices[0].clone()
+    fn prompt_player_choice<T: Display + FromStr + Clone>(&self, question: &str, possible_choices: Vec<T>) -> Result<T> {
+	println!("{}", question);
+	println!("Choices are: ");
+	for choice in possible_choices {
+	    print!("{}", choice);
+	}
+	println!("");
+	match self.prompt_player(question) {
+	    Ok(response) => {
+		match T::from_str(&response) {
+		    Ok(response) => Ok(response),
+		    Err(e) => Err(anyhow!("Unable to convert {} ", response))
+		}
+	    },
+	    Err(e) => Err(e)
+	}
+    }
+}
+
+
+impl HumanPlayer {
+    pub fn new(id: PlayerID) -> Self {
+        let hand = Vec::new();
+	let prompter = LocalPrompter::new();
+	let name = prompter.prompt_player("Please enter your name: ").unwrap();
+	HumanPlayer { id, name, prompter, hand}
     }
 }
 
