@@ -6,16 +6,20 @@ use anyhow::Result;
 use enumset::{EnumSet, EnumSetType};
 use player::dumb_player::DumbPlayer;
 use player::human_player::HumanPlayer;
+use player::random_player::RandomPlayer;
 use player::traits::Player;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::cmp::min;
 
 // TODO Max cards needs to sit with this
 const STARTING_CARDS: u8 = 2;
 const STARTING_COINS: u8 = 2;
 const STARTING_LIVES: u8 = 2;
+const REQUIRE_COUP_COINS: u8 = 10;
+// TODO if num_lives > num_cards just reduce num_lives
 
 // Game change turns
 // Every Player
@@ -65,6 +69,7 @@ impl Game {
         let mut driver = GameDriver::new(identities, num_cards);
         let turn_order = driver.players.keys().cloned().collect();
         let mut state = GameState::new(num_cards, turn_order);
+        // TODO Allow for different variants on players
         for id in 0..num_players {
             // Create Player
             let id = PlayerID(id);
@@ -73,7 +78,7 @@ impl Game {
                 .insert(id.clone(), PlayerState::new(STARTING_LIVES));
             driver
                 .players
-                .insert(id.clone(), Box::new(DumbPlayer::new(id.clone())));
+                .insert(id.clone(), Box::new(RandomPlayer::new(id.clone())));
         }
 
         Self { driver, state }
@@ -132,18 +137,23 @@ impl Game {
         // TODO - Establish turn order -> Roll for it? Then clockwise?
         // Find a way not to do this twice
         let turn_order = self.driver.players.keys().cloned().collect();
-
         self.shuffle();
         self.deal(&turn_order);
+	self.update_active_players(&turn_order);
 
         // Start Game Loop
         while !self.game_over(&turn_order) {
             // Need to check game over everytime state changes. --> Sad
             let active_players = &self.active_players(&turn_order);
             for active_id in active_players {
-                // Check if player is alive, otherwise pass on their turn
                 let player = self.driver.players.get(active_id).unwrap();
-                let action = player.choose_action(&self.state);
+
+                // Enforce Required Coup
+                let action = if player.count_coins(&self.state) < REQUIRE_COUP_COINS {
+                    player.choose_action(&self.state)
+                } else {
+                    Action::Coup(player.choose_forced_coup(&self.state))
+                };
 
                 // Allow for actions to be blocked
                 for blocker_id in active_players {
@@ -224,17 +234,43 @@ impl Game {
 
     fn process_action(&mut self, action: &Action, actor: &PlayerID) {
         println!("Player {:?} chose action {:#?}", actor, action);
+        let mut player = self.state.player_states.get_mut(&actor).unwrap();
         match action {
+            // TODO All constants should be defined
+
             Action::Income => {
-                let mut player = self.state.player_states.get_mut(&actor).unwrap();
+		let mut player = self.state.player_states.get_mut(&actor).unwrap();
                 player.num_coins += 1;
             }
+            Action::ForeignAid => {
+		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                player.num_coins += 2;
+            }
+            Action::Tax => {
+		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                player.num_coins += 3;
+            }
+            Action::Steal(target) => {
+                let mut target = self.state.player_states.get_mut(&target).unwrap();
+		let coins_to_steal = min(target.num_coins, 2);
+                target.num_coins -= coins_to_steal;
+		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                player.num_coins += coins_to_steal;
+            }
+	    // TODO Trying a blocked assassination should still result in side effect
+	    Action::Assassinate(target) => {
+		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+		player.num_coins -= 3;
+		self.kill_player(target);
+	    }
             Action::Coup(target) => {
-                let mut attacker = self.state.player_states.get_mut(&actor).unwrap();
-                attacker.num_coins -= 7;
+		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                player.num_coins -= 7;
                 self.kill_player(target);
             }
-            _ => panic!("Unimplemented..."),
+            _ => {
+                println!("Unknown action... Moving on");
+            }
         }
     }
 

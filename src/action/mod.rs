@@ -7,6 +7,7 @@ pub enum Action {
     Tax,
     Assassinate(PlayerID),
     Coup(PlayerID),
+    Steal(PlayerID),
     Exchange,
     BlockForeignAid,
     BlockAssassination,
@@ -25,6 +26,7 @@ impl Action {
 
             // Can only block if they assassinate you
             Action::Assassinate(target) => target == id,
+	    Action::Steal(target) => target == id,
             Action::ForeignAid => true,
         }
     }

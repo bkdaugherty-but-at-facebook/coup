@@ -11,24 +11,28 @@ pub trait Player {
     fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action>;
     fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> Option<usize>;
     fn choose_card_to_lose(&self, state: &GameState) -> usize;
+    fn choose_forced_coup(&self, state: &GameState) -> PlayerID;
     
     // Utility functions on player state
     fn get_hand(&self) -> Vec<Identity>;
     fn set_hand(&mut self, hand: Vec<Identity>);
     fn who_am_i(&self) -> &PlayerID;
 
-    
-
     // Start built-in functions
     fn lose_challenge(&mut self, state: &GameState) -> Identity {
 	// TODO handle user errors
+	self.lose_life(state)
+    }
+
+    fn lose_life(&mut self, state: &GameState) -> Identity {
+	// TODO handle user errors --> Don't require choice if only one card to lose
 	let index = self.choose_card_to_lose(state);
 	match self.discard(index) {
 	    Ok(identity) => identity,
-	    Err(e) => self.lose_challenge(state),
+	    Err(e) => self.lose_life(state),
 	}
     }
-    
+
     fn replace_card(&mut self, to_replace: usize, card: Identity) {
         let mut hand = self.get_hand();
         mem::replace(&mut hand[to_replace], card.clone());
@@ -79,6 +83,7 @@ pub trait Player {
 	    Action::Exchange => self.has_identity(Identity::Ambassador),
 	    Action::BlockForeignAid => self.has_identity(Identity::Duke),
 	    Action::BlockAssassination => self.has_identity(Identity::Contessa),
+	    Action::Steal(..) => self.has_identity(Identity::Captain),
 	}
     }
 
