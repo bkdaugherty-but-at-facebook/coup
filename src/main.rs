@@ -1,9 +1,12 @@
 mod action;
+mod logger;
 mod player;
 
 use action::Action;
 use anyhow::Result;
 use enumset::{EnumSet, EnumSetType};
+use logger::local_logger::LocalLogger;
+use logger::traits::Logger;
 use player::dumb_player::DumbPlayer;
 use player::human_player::HumanPlayer;
 use player::random_player::RandomPlayer;
@@ -36,6 +39,10 @@ pub enum PlayerType {
     DumbCPU,
     RandomCPU,
     Local,
+}
+
+pub enum LoggerType {
+    Local
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -75,12 +82,17 @@ pub struct GameDriver {
 pub struct Game {
     driver: GameDriver,
     state: GameState,
+    logger: Box<dyn Logger>,
 }
 
 impl Game {
     // Will need to decide on how to assign players / who is playing
-    pub fn new(identities: EnumSet<Identity>, players: Vec<PlayerConfig>) -> Self {
+    pub fn new(identities: EnumSet<Identity>, players: Vec<PlayerConfig>, logger_type: LoggerType) -> Self {
         // TODO -> Yuck panic on 0?
+	let logger = match logger_type {
+	    LoggerType::Local => Box::new(LocalLogger{}) as Box<dyn Logger>
+	};
+	
         let num_players = players.len();
         let num_cards = match num_players {
             1..=4 => 3,
@@ -111,7 +123,7 @@ impl Game {
             driver.players.insert(id.clone(), player);
         }
 
-        Self { driver, state }
+        Self { driver, state, logger }
     }
 
     fn shuffle(&mut self) {
@@ -403,10 +415,12 @@ fn main() -> Result<()> {
         | Identity::Captain
         | Identity::Duke;
     let players = vec![
-        PlayerConfig::new(PlayerType::DumbCPU, "Martha".to_string()),
-        PlayerConfig::new(PlayerType::RandomCPU, "George".to_string()),
+        PlayerConfig::new(PlayerType::DumbCPU, "Charlie".to_string()),
+        PlayerConfig::new(PlayerType::RandomCPU, "Miela".to_string()),
+	PlayerConfig::new(PlayerType::RandomCPU, "Porter".to_string()),
+	PlayerConfig::new(PlayerType::RandomCPU, "Brendon".to_string()),
     ];
-    let mut game = Game::new(game_identities, players);
+    let mut game = Game::new(game_identities, players, LoggerType::Local);
     game.play();
 
     // let player = HumanPlayer::new(PlayerID(1));
