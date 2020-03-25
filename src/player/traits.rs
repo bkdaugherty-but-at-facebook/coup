@@ -84,6 +84,8 @@ pub trait Player {
 	    Action::BlockForeignAid => self.has_identity(Identity::Duke),
 	    Action::BlockAssassination => self.has_identity(Identity::Contessa),
 	    Action::Steal(..) => self.has_identity(Identity::Captain),
+	    Action::BlockStealCaptain => self.has_identity(Identity::Captain),
+	    Action::BlockStealAmbassador => self.has_identity(Identity::Ambassador),
 	}
     }
 

@@ -11,23 +11,36 @@ pub enum Action {
     Exchange,
     BlockForeignAid,
     BlockAssassination,
+    BlockStealCaptain,
+    BlockStealAmbassador,
 }
 
 impl Action {
     // Dependent on id of target
-    pub fn blockable(&self, id: &PlayerID) -> bool {
+    pub fn blockable(&self, id: &PlayerID) -> Option<Vec<Action>> {
         match self {
             Action::Income
             | Action::Coup(..)
             | Action::Exchange
             | Action::Tax
             | Action::BlockForeignAid
-            | Action::BlockAssassination => false,
+            | Action::BlockAssassination
+            | Action::BlockStealCaptain
+            | Action::BlockStealAmbassador => None,
 
-            // Can only block if they assassinate you
-            Action::Assassinate(target) => target == id,
-	    Action::Steal(target) => target == id,
-            Action::ForeignAid => true,
+            // Can only block if they target you
+            Action::Assassinate(target) => match target == id {
+                true => Some(vec![Action::BlockAssassination]),
+                false => None,
+            },
+            Action::Steal(target) => match target == id {
+                true => Some(vec![
+                    Action::BlockStealCaptain,
+                    Action::BlockStealAmbassador,
+                ]),
+		false => None,
+            },
+            Action::ForeignAid => Some(vec![Action::BlockForeignAid]),
         }
     }
     // Defines if an action is challengable
@@ -37,11 +50,4 @@ impl Action {
             _ => true,
         }
     }
-
-    // Defines who this action is exclusive to
-    // Breaks down if two entities can perform two actions
-
-    /*pub fn exclusive_to(&self) -> Option<Identity> {
-
-    }*/
 }

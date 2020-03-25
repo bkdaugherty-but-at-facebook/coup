@@ -10,9 +10,9 @@ use player::random_player::RandomPlayer;
 use player::traits::Player;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::cmp::min;
 
 // TODO Max cards needs to sit with this
 const STARTING_CARDS: u8 = 2;
@@ -31,6 +31,28 @@ struct Challenge {
     actor_id: PlayerID,
     challenger_id: PlayerID,
     action: Action,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum PlayerType {
+    DumbCPU,
+    RandomCPU,
+    Local,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct PlayerConfig {
+    player_type: PlayerType,
+    player_name: String,
+}
+
+impl PlayerConfig {
+    fn new(player_type: PlayerType, player_name: String) -> Self {
+        PlayerConfig {
+            player_type,
+            player_name,
+        }
+    }
 }
 
 // Holds internal state about the current game
@@ -59,26 +81,36 @@ pub struct Game {
 
 impl Game {
     // Will need to decide on how to assign players / who is playing
-    pub fn new(identities: EnumSet<Identity>, num_players: u8) -> Self {
+    pub fn new(identities: EnumSet<Identity>, players: Vec<PlayerConfig>) -> Self {
         // TODO -> Yuck panic on 0?
+        let num_players = players.len();
         let num_cards = match num_players {
             1..=4 => 3,
             _ => 4,
         };
 
         let mut driver = GameDriver::new(identities, num_cards);
+
+        // TODO --> This is bad. Not populated yet?
         let turn_order = driver.players.keys().cloned().collect();
         let mut state = GameState::new(num_cards, turn_order);
-        // TODO Allow for different variants on players
-        for id in 0..num_players {
+
+        let mut player_id = 0;
+        for entry in players {
+            let id = PlayerID(player_id.clone());
+            player_id = player_id + 1;
+
             // Create Player
-            let id = PlayerID(id);
+            let player = match entry.player_type {
+                PlayerType::DumbCPU => Box::new(RandomPlayer::new(id.clone())),
+                PlayerType::RandomCPU => Box::new(RandomPlayer::new(id.clone())),
+                PlayerType::Local => panic!("Unimplemented"),
+            };
+
             state
                 .player_states
                 .insert(id.clone(), PlayerState::new(STARTING_LIVES));
-            driver
-                .players
-                .insert(id.clone(), Box::new(RandomPlayer::new(id.clone())));
+            driver.players.insert(id.clone(), player);
         }
 
         Self { driver, state }
@@ -139,7 +171,7 @@ impl Game {
         let turn_order = self.driver.players.keys().cloned().collect();
         self.shuffle();
         self.deal(&turn_order);
-	self.update_active_players(&turn_order);
+        self.update_active_players(&turn_order);
 
         // Start Game Loop
         while !self.game_over(&turn_order) {
@@ -155,9 +187,11 @@ impl Game {
                     Action::Coup(player.choose_forced_coup(&self.state))
                 };
 
+                println!("{:?} chose action {:?}", active_id, action);
+
                 // Allow for actions to be blocked
                 for blocker_id in active_players {
-                    if action.blockable(blocker_id) {
+                    if action.blockable(blocker_id).is_some() {
                         let blocker = self.driver.players.get(blocker_id).unwrap();
                         if let Some(blocking_action) =
                             blocker.will_block(&self.state, &active_id, &action)
@@ -165,7 +199,7 @@ impl Game {
                             if let Some(challenge) =
                                 self.check_for_challenges(blocker_id, &turn_order, &blocking_action)
                             {
-                                // Need to know who won the challenge --> to resolve block
+                                // TODO Need to know who won the challenge --> to resolve block
                                 self.process_challenge(&challenge);
                             }
                         }
@@ -194,6 +228,7 @@ impl Game {
     }
 
     fn process_challenge(&mut self, challenge: &Challenge) {
+        println!("{:?}", challenge);
         // TODO - UNPACK
         let actor_id = &challenge.actor_id;
         let challenger_id = &challenge.challenger_id;
@@ -233,38 +268,36 @@ impl Game {
     }
 
     fn process_action(&mut self, action: &Action, actor: &PlayerID) {
-        println!("Player {:?} chose action {:#?}", actor, action);
         let mut player = self.state.player_states.get_mut(&actor).unwrap();
         match action {
             // TODO All constants should be defined
-
             Action::Income => {
-		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                let mut player = self.state.player_states.get_mut(&actor).unwrap();
                 player.num_coins += 1;
             }
             Action::ForeignAid => {
-		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                let mut player = self.state.player_states.get_mut(&actor).unwrap();
                 player.num_coins += 2;
             }
             Action::Tax => {
-		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                let mut player = self.state.player_states.get_mut(&actor).unwrap();
                 player.num_coins += 3;
             }
             Action::Steal(target) => {
                 let mut target = self.state.player_states.get_mut(&target).unwrap();
-		let coins_to_steal = min(target.num_coins, 2);
+                let coins_to_steal = min(target.num_coins, 2);
                 target.num_coins -= coins_to_steal;
-		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                let mut player = self.state.player_states.get_mut(&actor).unwrap();
                 player.num_coins += coins_to_steal;
             }
-	    // TODO Trying a blocked assassination should still result in side effect
-	    Action::Assassinate(target) => {
-		let mut player = self.state.player_states.get_mut(&actor).unwrap();
-		player.num_coins -= 3;
-		self.kill_player(target);
-	    }
+            // TODO Trying a blocked assassination should still result in side effect
+            Action::Assassinate(target) => {
+                let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                player.num_coins -= 3;
+                self.kill_player(target);
+            }
             Action::Coup(target) => {
-		let mut player = self.state.player_states.get_mut(&actor).unwrap();
+                let mut player = self.state.player_states.get_mut(&actor).unwrap();
                 player.num_coins -= 7;
                 self.kill_player(target);
             }
@@ -372,8 +405,11 @@ fn main() -> Result<()> {
         | Identity::Contessa
         | Identity::Captain
         | Identity::Duke;
-    let num_players = 3;
-    let mut game = Game::new(game_identities, num_players);
+    let players = vec![
+        PlayerConfig::new(PlayerType::DumbCPU, "Martha".to_string()),
+        PlayerConfig::new(PlayerType::RandomCPU, "George".to_string()),
+    ];
+    let mut game = Game::new(game_identities, players);
     game.play();
 
     // let player = HumanPlayer::new(PlayerID(1));

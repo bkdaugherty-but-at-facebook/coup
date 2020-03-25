@@ -45,15 +45,22 @@ impl Player for RandomPlayer {
 	return RandomPlayer::choose_random(options);
     }
     fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool {
-	
-        false
+        RandomPlayer::choose_random(&mut[false, true])
     }
     fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action> {
-	None
+	match action.blockable(player_id) {
+	    Some(options) => {
+		let num_actions = options.len();
+		let mut options : Vec<Option<Action>> = options.into_iter().map(|option| Some(option)).collect();
+		options.push(None);
+		RandomPlayer::choose_random(&mut options[0..num_actions + 1])
+	    },
+	    None => None
+	}	
     }
     // Index in hand to replace
     fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> Option<usize> {
-	None
+	RandomPlayer::choose_random(&mut [None, Some(0)])
     }
 
     fn choose_card_to_lose(&self, state: &GameState) -> usize {
