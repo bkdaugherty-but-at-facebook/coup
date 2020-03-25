@@ -72,7 +72,19 @@ impl HumanPlayer {
 	let name = prompter.prompt_player("Please enter your name: ").unwrap();
 	HumanPlayer { id, name, prompter, hand}
     }
+
+
+    // Need to impl Player now!
+    // Needs to be recursive if fail
+    pub fn choose_action(&self, state: &GameState) -> Action {
+	let available_actions = self.get_available_actions(state);
+	for action in available_actions {
+	    println!("{:?}", action)
+	}
+	Action::Income
+    }
 }
+
 
 
 /*impl Player for HumanPlayer {

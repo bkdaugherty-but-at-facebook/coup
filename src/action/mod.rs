@@ -1,4 +1,5 @@
 use crate::PlayerID;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -51,3 +52,17 @@ impl Action {
         }
     }
 }
+
+
+impl fmt::Display for Action {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	let to_write = match self {
+	    _ => format!("{:?}", self)
+	};
+        write!(f, "{}", to_write)
+    }
+}
+
+
+
+

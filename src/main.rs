@@ -42,7 +42,7 @@ pub enum PlayerType {
 }
 
 pub enum LoggerType {
-    Local
+    Local,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -87,12 +87,16 @@ pub struct Game {
 
 impl Game {
     // Will need to decide on how to assign players / who is playing
-    pub fn new(identities: EnumSet<Identity>, players: Vec<PlayerConfig>, logger_type: LoggerType) -> Self {
+    pub fn new(
+        identities: EnumSet<Identity>,
+        players: Vec<PlayerConfig>,
+        logger_type: LoggerType,
+    ) -> Self {
         // TODO -> Yuck panic on 0?
-	let logger = match logger_type {
-	    LoggerType::Local => Box::new(LocalLogger{}) as Box<dyn Logger>
-	};
-	
+        let logger = match logger_type {
+            LoggerType::Local => Box::new(LocalLogger {}) as Box<dyn Logger>,
+        };
+
         let num_players = players.len();
         let num_cards = match num_players {
             1..=4 => 3,
@@ -117,14 +121,19 @@ impl Game {
                 PlayerType::Local => panic!("Unimplemented"),
             };
 
-            state
-                .player_states
-                .insert(id.clone(), PlayerState::new(entry.player_name, STARTING_LIVES));
-	    
+            state.player_states.insert(
+                id.clone(),
+                PlayerState::new(entry.player_name, STARTING_LIVES),
+            );
+
             driver.players.insert(id.clone(), player);
         }
 
-        Self { driver, state, logger }
+        Self {
+            driver,
+            state,
+            logger,
+        }
     }
 
     fn shuffle(&mut self) {
@@ -176,14 +185,20 @@ impl Game {
         None
     }
 
-    pub fn play(&mut self) {
-        // TODO - Establish turn order -> Roll for it? Then clockwise?
+    pub fn setup(&mut self) {
+   // TODO - Establish turn order -> Roll for it? Then clockwise?
         // Find a way not to do this twice
         let turn_order = self.driver.players.keys().cloned().collect();
         self.shuffle();
         self.deal(&turn_order);
         self.update_active_players(&turn_order);
 
+    }
+    
+
+    pub fn play(&mut self) {
+	self.setup();
+	let turn_order = self.driver.players.keys().cloned().collect();
         // Start Game Loop
         while !self.game_over(&turn_order) {
             // Need to check game over everytime state changes. --> Sad
@@ -198,27 +213,55 @@ impl Game {
                     Action::Coup(player.choose_forced_coup(&self.state))
                 };
 
-                self.logger.log(format!("{} chose action {:?}", self.get_player_name(active_id), action).to_string());
+                self.logger.log(
+                    format!(
+                        "{} chose action {:?}",
+                        self.get_player_name(active_id),
+                        action
+                    )
+                    .to_string(),
+                );
+
+                // TODO -> Check for blocks --> Currently this loop fucks us up
+                // TODO -> This is overly complex, and does not allow things to be challenged if someone wants
+                // to block. Would like to be able to choose these at the same time
+                let mut block_was_challenged = false;
 
                 // Allow for actions to be blocked
                 for blocker_id in active_players {
                     if action.blockable(blocker_id).is_some() {
                         let blocker = self.driver.players.get(blocker_id).unwrap();
+                        // actor steal from blocker
                         if let Some(blocking_action) =
                             blocker.will_block(&self.state, &active_id, &action)
                         {
+                            // blocker block
+                            self.logger.log(format!(
+                                "{} is blocking {}'s {:?} with {:?}",
+                                self.get_player_name(blocker_id),
+                                self.get_player_name(active_id),
+                                action,
+                                blocking_action
+                            ));
                             if let Some(challenge) =
                                 self.check_for_challenges(blocker_id, &turn_order, &blocking_action)
                             {
-                                // TODO Need to know who won the challenge --> to resolve block
-                                self.process_challenge(&challenge);
+                                // actor challenge your block
+                                block_was_challenged = true;
+                                if !self.process_challenge(&challenge) {
+                                    //Challenge was unsuccessful, action is blocked, turn is over
+                                    continue;
+                                } // Challenge was successful, block is invalidated, action goes through
+                            } else {
+                                // Block was unchallenged, do not allow anyone to challenge
+                                continue;
                             }
                         }
                     }
                 }
 
-                // Allow for challenging
-                if action.challengable() {
+                // TODO --> Do not allow for challenging of action if already blocked
+                if action.challengable() && !block_was_challenged {
                     if let Some(challenge) =
                         self.check_for_challenges(active_id, &turn_order, &action)
                     {
@@ -238,12 +281,17 @@ impl Game {
         self.present_game_results();
     }
 
-    fn process_challenge(&mut self, challenge: &Challenge) {
-        self.logger.log(format!("{:?}", challenge).to_string());
-        // TODO - UNPACK
+    fn process_challenge(&mut self, challenge: &Challenge) -> bool {
         let actor_id = &challenge.actor_id;
         let challenger_id = &challenge.challenger_id;
         let action = &challenge.action;
+
+        self.logger.log(format!(
+            "{} is challenging {}'s {:?}",
+            self.get_player_name(challenger_id),
+            self.get_player_name(actor_id),
+            action
+        ));
 
         let mut winner_id = actor_id;
         let mut loser_id = actor_id;
@@ -254,25 +302,49 @@ impl Game {
         } else {
             winner_id = challenger_id;
         }
-
+        self.logger.log(format!(
+            "{} lost the challenge",
+            self.get_player_name(loser_id)
+        ));
         self.kill_player(loser_id);
         // let winner = self.driver.players.get_mut(winner_id).unwrap();
         // TODO - Give winner a card from the deck
+        return challenger_id == winner_id;
     }
 
     fn present_game_results(&self) {
         if self.state.active_players.len() != 1 {
-            self.logger.log(format!("Uh oh... a lot of people won?").to_string());
+            self.logger
+                .log(format!("Uh oh... a lot of people won?").to_string());
         } else {
-            self.logger.log(format!("{} won!", self.get_player_name(&self.state.active_players[0])).to_string());
+            self.logger.log(
+                format!(
+                    "{} won!",
+                    self.get_player_name(&self.state.active_players[0])
+                )
+                .to_string(),
+            );
         }
     }
 
     fn kill_player(&mut self, player_id: &PlayerID) {
         let mut victim = self.driver.players.get_mut(player_id).unwrap();
+	let num_lives_left = self.state.player_states.get(player_id).unwrap().num_lives;
+	if num_lives_left == 0 {
+	    self.logger.log(
+		format!("Tried to kill {} but they have no lives left!",
+			self.get_player_name(player_id)
+		)
+	    );
+	    return;
+	}
         let to_discard = victim.choose_card_to_lose(&self.state);
         let discarded = victim.discard(to_discard).unwrap();
-        self.logger.log(format!("{} discarded {:#?}", self.get_player_name(player_id), discarded));
+        self.logger.log(format!(
+            "{} discarded {:#?}",
+	    self.get_player_name(player_id),
+            discarded
+        ));
         let mut victim_state = self.state.player_states.get_mut(player_id).unwrap();
         victim_state.lost_lives.push(discarded);
         victim_state.num_lives -= 1;
@@ -312,7 +384,8 @@ impl Game {
                 self.kill_player(target);
             }
             _ => {
-                self.logger.log(format!("Unknown action... Moving on {:?}", action).to_string());
+                self.logger
+                    .log(format!("Unknown action... Moving on {:?}", action).to_string());
             }
         }
     }
@@ -337,9 +410,9 @@ impl Game {
     fn is_player_alive(&self, player_id: &PlayerID) -> bool {
         self.state.player_states.get(&player_id).unwrap().is_alive()
     }
-    
+
     fn get_player_name(&self, player_id: &PlayerID) -> String {
-	self.state.player_states.get(&player_id).unwrap().get_name()
+        self.state.player_states.get(&player_id).unwrap().get_name()
     }
 }
 
@@ -353,7 +426,6 @@ impl GameState {
             turn_order,
         }
     }
-    
 }
 
 impl GameDriver {
@@ -378,7 +450,7 @@ impl PlayerState {
     pub fn new(player_name: String, num_lives: u8) -> Self {
         let lost_lives = Vec::new();
         Self {
-	    player_name,
+            player_name,
             num_coins: STARTING_COINS,
             num_lives,
             lost_lives,
@@ -389,7 +461,7 @@ impl PlayerState {
     }
 
     pub fn get_name(&self) -> String {
-	self.player_name.clone()
+        self.player_name.clone()
     }
 }
 
@@ -420,8 +492,7 @@ impl GameField {
     }
 }
 
-
-use log::{Record, Level, Metadata, SetLoggerError, LevelFilter};
+use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
 
 struct SimpleLogger;
 
@@ -442,9 +513,8 @@ impl log::Log for SimpleLogger {
 static LOGGER: SimpleLogger = SimpleLogger;
 
 fn main() -> Result<()> {
-    log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(LevelFilter::Info));
-    
+    log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info));
+
     let game_identities = Identity::Ambassador
         | Identity::Assassin
         | Identity::Contessa
@@ -453,10 +523,15 @@ fn main() -> Result<()> {
     let players = vec![
         PlayerConfig::new(PlayerType::DumbCPU, "Charlie".to_string()),
         PlayerConfig::new(PlayerType::RandomCPU, "Miela".to_string()),
-	PlayerConfig::new(PlayerType::RandomCPU, "Porter".to_string()),
-	PlayerConfig::new(PlayerType::RandomCPU, "Brendon".to_string()),
+        PlayerConfig::new(PlayerType::RandomCPU, "Porter".to_string()),
+        PlayerConfig::new(PlayerType::RandomCPU, "Brendon".to_string()),
     ];
+    // let mut game = Game::new(game_identities, players, LoggerType::Local);
+    // game.play();
+
+    let human_player = HumanPlayer::new(PlayerID(4));
     let mut game = Game::new(game_identities, players, LoggerType::Local);
-    game.play();
+    game.setup();
+    human_player.choose_action(&game.state);
     Ok(())
 }
