@@ -100,8 +100,8 @@ impl Game {
 
             // Create Player
             let player = match entry.player_type {
-                PlayerType::DumbCPU => Box::new(RandomPlayer::new(id.clone())),
-                PlayerType::RandomCPU => Box::new(RandomPlayer::new(id.clone())),
+                PlayerType::DumbCPU => Box::new(DumbPlayer::new(id.clone())) as Box<dyn Player>,
+                PlayerType::RandomCPU => Box::new(RandomPlayer::new(id.clone())) as Box<dyn Player>,
                 PlayerType::Local => panic!("Unimplemented"),
             };
 
