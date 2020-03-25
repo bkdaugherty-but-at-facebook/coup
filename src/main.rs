@@ -9,10 +9,8 @@ use player::human_player::HumanPlayer;
 use player::random_player::RandomPlayer;
 use player::traits::Player;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::convert::TryInto;
 
 // TODO Max cards needs to sit with this
 const STARTING_CARDS: u8 = 2;
@@ -245,7 +243,7 @@ impl Game {
         }
 
         self.kill_player(loser_id);
-        let winner = self.driver.players.get_mut(winner_id).unwrap();
+        // let winner = self.driver.players.get_mut(winner_id).unwrap();
         // TODO - Give winner a card from the deck
     }
 
@@ -268,7 +266,6 @@ impl Game {
     }
 
     fn process_action(&mut self, action: &Action, actor: &PlayerID) {
-        let mut player = self.state.player_states.get_mut(&actor).unwrap();
         match action {
             // TODO All constants should be defined
             Action::Income => {

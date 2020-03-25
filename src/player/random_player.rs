@@ -25,7 +25,7 @@ impl RandomPlayer {
 impl Player for RandomPlayer {
     fn choose_action(&self, state: &GameState) -> Action {
 	// TODO -> Lazy static a rng --> Make a rand module
-	let mut rng = rand::thread_rng();
+	// let mut rng = rand::thread_rng();
 	// TODO -> Choose target randomly -> Then refactor choose_forced_coup
 	let target = self.choose_forced_coup(state);
 	let mut available_actions = vec!(Action::Income, Action::ForeignAid,  Action::Tax, Action::Steal(target.clone()));
@@ -44,10 +44,10 @@ impl Player for RandomPlayer {
 	let mut options = &mut available_actions[0..num_actions];
 	return RandomPlayer::choose_random(options);
     }
-    fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool {
+    fn will_challenge(&self, _state: &GameState, _player_id: &PlayerID, _action: &Action) -> bool {
         RandomPlayer::choose_random(&mut[false, true])
     }
-    fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action> {
+    fn will_block(&self, _state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action> {
 	match action.blockable(player_id) {
 	    Some(options) => {
 		let num_actions = options.len();
@@ -59,11 +59,11 @@ impl Player for RandomPlayer {
 	}	
     }
     // Index in hand to replace
-    fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> Option<usize> {
+    fn choose_card_to_replace(&self, _state: &GameState, _card: &Identity) -> Option<usize> {
 	RandomPlayer::choose_random(&mut [None, Some(0)])
     }
 
-    fn choose_card_to_lose(&self, state: &GameState) -> usize {
+    fn choose_card_to_lose(&self, _state: &GameState) -> usize {
 	0
     }
 

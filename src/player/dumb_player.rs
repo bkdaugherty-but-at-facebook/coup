@@ -15,21 +15,21 @@ impl DumbPlayer {
 }
 
 impl Player for DumbPlayer {
-    fn choose_action(&self, state: &GameState) -> Action {
+    fn choose_action(&self, _state: &GameState) -> Action {
         Action::Income
     }
-    fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool {
+    fn will_challenge(&self, _state: &GameState, _player_id: &PlayerID, _action: &Action) -> bool {
         false
     }
-    fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action> {
+    fn will_block(&self, _state: &GameState, _player_id: &PlayerID, _action: &Action) -> Option<Action> {
 	None
     }
     // Index in hand to replace
-    fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> Option<usize> {
+    fn choose_card_to_replace(&self, _state: &GameState, _card: &Identity) -> Option<usize> {
 	None
     }
 
-    fn choose_card_to_lose(&self, state: &GameState) -> usize {
+    fn choose_card_to_lose(&self, _state: &GameState) -> usize {
 	0
     }
 

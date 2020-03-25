@@ -29,7 +29,7 @@ pub trait Player {
 	let index = self.choose_card_to_lose(state);
 	match self.discard(index) {
 	    Ok(identity) => identity,
-	    Err(e) => self.lose_life(state),
+	    Err(_) => self.lose_life(state),
 	}
     }
 
