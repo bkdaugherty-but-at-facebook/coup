@@ -197,7 +197,7 @@ impl Game {
                     Action::Coup(player.choose_forced_coup(&self.state))
                 };
 
-                println!("{:?} chose action {:?}", active_id, action);
+                self.logger.log(format!("{:?} chose action {:?}", active_id, action).to_string());
 
                 // Allow for actions to be blocked
                 for blocker_id in active_players {
@@ -238,7 +238,7 @@ impl Game {
     }
 
     fn process_challenge(&mut self, challenge: &Challenge) {
-        println!("{:?}", challenge);
+        self.logger.log(format!("{:?}", challenge).to_string());
         // TODO - UNPACK
         let actor_id = &challenge.actor_id;
         let challenger_id = &challenge.challenger_id;
@@ -261,9 +261,9 @@ impl Game {
 
     fn present_game_results(&self) {
         if self.state.active_players.len() != 1 {
-            println!("Uh oh... a lot of people won?");
+            self.logger.log(format!("Uh oh... a lot of people won?").to_string());
         } else {
-            println!("Player {:?} won!", self.state.active_players[0]);
+            self.logger.log(format!("Player {:?} won!", self.state.active_players[0]).to_string());
         }
     }
 
@@ -271,7 +271,7 @@ impl Game {
         let mut victim = self.driver.players.get_mut(player_id).unwrap();
         let to_discard = victim.choose_card_to_lose(&self.state);
         let discarded = victim.discard(to_discard).unwrap();
-        println!("Dying Player {:?} discarded {:#?}", player_id, discarded);
+        self.logger.log(format!("Dying Player {:?} discarded {:#?}", player_id, discarded));
         let mut victim_state = self.state.player_states.get_mut(player_id).unwrap();
         victim_state.lost_lives.push(discarded);
         victim_state.num_lives -= 1;
@@ -311,7 +311,7 @@ impl Game {
                 self.kill_player(target);
             }
             _ => {
-                println!("Unknown action... Moving on");
+                self.logger.log(format!("Unknown action... Moving on {:?}", action).to_string());
             }
         }
     }
