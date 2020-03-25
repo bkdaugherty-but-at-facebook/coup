@@ -119,7 +119,8 @@ impl Game {
 
             state
                 .player_states
-                .insert(id.clone(), PlayerState::new(STARTING_LIVES));
+                .insert(id.clone(), PlayerState::new(entry.player_name, STARTING_LIVES));
+	    
             driver.players.insert(id.clone(), player);
         }
 
@@ -197,7 +198,7 @@ impl Game {
                     Action::Coup(player.choose_forced_coup(&self.state))
                 };
 
-                self.logger.log(format!("{:?} chose action {:?}", active_id, action).to_string());
+                self.logger.log(format!("{} chose action {:?}", self.get_player_name(active_id), action).to_string());
 
                 // Allow for actions to be blocked
                 for blocker_id in active_players {
@@ -263,7 +264,7 @@ impl Game {
         if self.state.active_players.len() != 1 {
             self.logger.log(format!("Uh oh... a lot of people won?").to_string());
         } else {
-            self.logger.log(format!("Player {:?} won!", self.state.active_players[0]).to_string());
+            self.logger.log(format!("{} won!", self.get_player_name(&self.state.active_players[0])).to_string());
         }
     }
 
@@ -271,7 +272,7 @@ impl Game {
         let mut victim = self.driver.players.get_mut(player_id).unwrap();
         let to_discard = victim.choose_card_to_lose(&self.state);
         let discarded = victim.discard(to_discard).unwrap();
-        self.logger.log(format!("Dying Player {:?} discarded {:#?}", player_id, discarded));
+        self.logger.log(format!("{} discarded {:#?}", self.get_player_name(player_id), discarded));
         let mut victim_state = self.state.player_states.get_mut(player_id).unwrap();
         victim_state.lost_lives.push(discarded);
         victim_state.num_lives -= 1;
@@ -336,6 +337,10 @@ impl Game {
     fn is_player_alive(&self, player_id: &PlayerID) -> bool {
         self.state.player_states.get(&player_id).unwrap().is_alive()
     }
+    
+    fn get_player_name(&self, player_id: &PlayerID) -> String {
+	self.state.player_states.get(&player_id).unwrap().get_name()
+    }
 }
 
 impl GameState {
@@ -348,6 +353,7 @@ impl GameState {
             turn_order,
         }
     }
+    
 }
 
 impl GameDriver {
@@ -362,15 +368,17 @@ impl GameDriver {
 #[derive(Debug)]
 pub struct PlayerState {
     lost_lives: Vec<Identity>,
+    player_name: String,
     num_coins: u8,
     // TODO --> Make this sync with deck somehow?
     num_lives: u8,
 }
 
 impl PlayerState {
-    pub fn new(num_lives: u8) -> Self {
+    pub fn new(player_name: String, num_lives: u8) -> Self {
         let lost_lives = Vec::new();
         Self {
+	    player_name,
             num_coins: STARTING_COINS,
             num_lives,
             lost_lives,
@@ -378,6 +386,10 @@ impl PlayerState {
     }
     pub fn is_alive(&self) -> bool {
         self.num_lives > 0
+    }
+
+    pub fn get_name(&self) -> String {
+	self.player_name.clone()
     }
 }
 
@@ -446,11 +458,5 @@ fn main() -> Result<()> {
     ];
     let mut game = Game::new(game_identities, players, LoggerType::Local);
     game.play();
-
-    // let player = HumanPlayer::new(PlayerID(1));
-
-    // Game Driver code
-    // Create Players
-
     Ok(())
 }
