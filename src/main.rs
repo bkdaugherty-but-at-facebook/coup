@@ -21,9 +21,6 @@ use std::fmt::{Display};
 
 use std::{thread, time};
 
-
-
-
 // TODO Max cards needs to sit with this
 const STARTING_CARDS: u8 = 2;
 const STARTING_COINS: u8 = 2;
