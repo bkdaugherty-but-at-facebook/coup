@@ -134,7 +134,7 @@ impl Game {
 		    // Existence of local player makes game interactive
 		    interactive = true;
 		    // Overrwrite name for local player
-		    print!("Please enter your name: ");
+		    print!("Creating a new Local Player!\nPlease enter your name: ");
 		    name = player_prompter.prompt_player(None).unwrap();
 		    Box::new(HumanPlayer::new(id.clone(), player_prompter)) as Box<dyn Player>
 		}
@@ -245,7 +245,6 @@ impl Game {
             for active_id in active_players {
 		self.logger.log(format!(
 		    "{}'s turn!", self.state.get_player_name(active_id))
-				
 		);
 		self.wait_if_interactive();
                 let player = self.driver.players.get(active_id).unwrap();
@@ -283,6 +282,7 @@ impl Game {
                         if let Some(blocking_action) =
                             blocker.will_block(&self.state, &active_id, &action)
                         {
+			    self.wait_if_interactive();
                             // blocker block
                             self.logger.log(format!(
                                 "{} is blocking {}'s {} with {}",
@@ -325,7 +325,7 @@ impl Game {
                 }
             }
         }
-
+	self.wait_if_interactive();
         self.present_game_results();
     }
 
@@ -333,7 +333,8 @@ impl Game {
         let actor_id = &challenge.actor_id;
         let challenger_id = &challenge.challenger_id;
         let action = &challenge.action;
-
+	
+	self.wait_if_interactive();
         self.logger.log(format!(
             "{} is challenging {}'s {}",
             self.get_player_name(challenger_id),
@@ -350,10 +351,13 @@ impl Game {
         } else {
             winner_id = challenger_id;
         }
+	
+	self.wait_if_interactive();
         self.logger.log(format!(
             "{} lost the challenge",
             self.get_player_name(loser_id)
         ));
+	self.wait_if_interactive();
         self.kill_player(loser_id);
         // let winner = self.driver.players.get_mut(winner_id).unwrap();
         // TODO - Give winner a card from the deck

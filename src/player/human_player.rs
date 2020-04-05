@@ -1,6 +1,6 @@
 use crate::player::traits::Player;
 use crate::{Action, GameState, Identity, PlayerID};
-use crate::prompter::{Prompter, LocalPrompter};
+use crate::prompter::{Prompter, LocalPrompter, PromptInfo};
 use anyhow::{anyhow, Result};
 
 pub struct HumanPlayer<P: Prompter> {
@@ -24,7 +24,10 @@ impl<P: Prompter> HumanPlayer<P> {
 impl<P: Prompter> Player for HumanPlayer<P> {
     fn choose_action(&self, state: &GameState) -> Action {
         let available_actions = self.get_available_actions(state);
-        let action = self.prompter.prompt_player_for_action("What will you do?", available_actions, state);
+        let action = self.prompter.prompt_player_for_action("What will you do?", available_actions, PromptInfo {
+	    state,
+	    player_hand: self.get_hand()
+	});
         match action {
             Ok(action) => action,
             Err(e) => {
@@ -42,7 +45,11 @@ impl<P: Prompter> Player for HumanPlayer<P> {
 	    // This should maybe be on game state?
             LocalPrompter::display_action(state, action.clone())
         );
-        match self.prompter.prompt_player_yes_no(question, Some(state)) {
+
+        match self.prompter.prompt_player_yes_no(question, Some(PromptInfo {
+	    state,
+	    player_hand: self.get_hand()
+	})) {
             Ok(x) => x,
             Err(e) => {
                 // To do --> errors handled in prompter?
