@@ -6,7 +6,10 @@ use anyhow::{anyhow, Result};
 const MAX_CARDS: u8 = 2;
 
 pub trait Player {
+    /// A player must define how they choose an action. This will be called in the game loop, and given
+    /// a snapshot of the game.
     fn choose_action(&self, state: &GameState) -> Action;
+
     fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool;
     fn will_block(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> Option<Action>;
     fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> Option<usize>;
@@ -70,6 +73,16 @@ pub trait Player {
 	} else {
 	    Err(anyhow!("Index out of range - {} of hand {}", index, hand.len()))
 	}
+    }
+
+    fn get_other_active_players(&self, state: &GameState) -> Vec<PlayerID> {
+	let mut other_players = vec!();
+	for player_id in &state.active_players {
+            if player_id != self.who_am_i() {
+		other_players.push(player_id.clone());
+            }
+        }
+	return other_players;
     }
 
     // Hm is enums with values an anti-pattern? fuq

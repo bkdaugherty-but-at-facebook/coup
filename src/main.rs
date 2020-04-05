@@ -1,6 +1,7 @@
 mod action;
 mod logger;
 mod player;
+mod prompter;
 
 use action::Action;
 use anyhow::Result;
@@ -11,6 +12,7 @@ use player::dumb_player::DumbPlayer;
 use player::human_player::HumanPlayer;
 use player::random_player::RandomPlayer;
 use player::traits::Player;
+use prompter::{LocalPrompter, Prompter};
 use rand::seq::SliceRandom;
 use std::cmp::min;
 use std::collections::HashMap;
@@ -79,6 +81,7 @@ pub struct GameDriver {
     players: HashMap<PlayerID, Box<dyn Player>>,
 }
 
+/// Main struct for the game
 pub struct Game {
     driver: GameDriver,
     state: GameState,
@@ -111,19 +114,24 @@ impl Game {
 
         let mut player_id = 0;
         for entry in players {
-            let id = PlayerID(player_id.clone());
+	    let id = PlayerID(player_id.clone());
             player_id = player_id + 1;
-
+	    let mut name = entry.player_name;
+	    let player_prompter = LocalPrompter::new();
             // Create Player
             let player = match entry.player_type {
                 PlayerType::DumbCPU => Box::new(DumbPlayer::new(id.clone())) as Box<dyn Player>,
                 PlayerType::RandomCPU => Box::new(RandomPlayer::new(id.clone())) as Box<dyn Player>,
-                PlayerType::Local => panic!("Unimplemented"),
+                PlayerType::Local => {
+		    // Overrwrite name for local player
+		    print!("Please enter your name: ");
+		    name = player_prompter.prompt_player(None).unwrap();
+		    Box::new(HumanPlayer::new(id.clone(), player_prompter)) as Box<dyn Player>
+		}
             };
-
             state.player_states.insert(
                 id.clone(),
-                PlayerState::new(entry.player_name, STARTING_LIVES),
+                PlayerState::new(name, STARTING_LIVES),
             );
 
             driver.players.insert(id.clone(), player);
@@ -186,15 +194,13 @@ impl Game {
     }
 
     pub fn setup(&mut self) {
-   // TODO - Establish turn order -> Roll for it? Then clockwise?
+	// TODO - Establish turn order -> Roll for it? Then clockwise?
         // Find a way not to do this twice
         let turn_order = self.driver.players.keys().cloned().collect();
         self.shuffle();
         self.deal(&turn_order);
         self.update_active_players(&turn_order);
-
     }
-    
 
     pub fn play(&mut self) {
 	self.setup();
@@ -222,13 +228,17 @@ impl Game {
                     .to_string(),
                 );
 
-                // TODO -> Check for blocks --> Currently this loop fucks us up
                 // TODO -> This is overly complex, and does not allow things to be challenged if someone wants
                 // to block. Would like to be able to choose these at the same time
                 let mut block_was_challenged = false;
 
                 // Allow for actions to be blocked
                 for blocker_id in active_players {
+		    // Don't block yourself
+		    if blocker_id == active_id {
+			continue;
+		    }
+		    
                     if action.blockable(blocker_id).is_some() {
                         let blocker = self.driver.players.get(blocker_id).unwrap();
                         // actor steal from blocker
@@ -412,7 +422,7 @@ impl Game {
     }
 
     fn get_player_name(&self, player_id: &PlayerID) -> String {
-        self.state.player_states.get(&player_id).unwrap().get_name()
+        self.state.get_player_name(&player_id)
     }
 }
 
@@ -425,6 +435,9 @@ impl GameState {
             active_players: turn_order.iter().cloned().collect(),
             turn_order,
         }
+    }
+    fn get_player_name(&self, player_id: &PlayerID) -> String {
+        self.player_states.get(&player_id).unwrap().get_name()
     }
 }
 
@@ -524,14 +537,11 @@ fn main() -> Result<()> {
         PlayerConfig::new(PlayerType::DumbCPU, "Charlie".to_string()),
         PlayerConfig::new(PlayerType::RandomCPU, "Miela".to_string()),
         PlayerConfig::new(PlayerType::RandomCPU, "Porter".to_string()),
-        PlayerConfig::new(PlayerType::RandomCPU, "Brendon".to_string()),
+        PlayerConfig::new(PlayerType::Local, "Brendon".to_string()),
     ];
-    // let mut game = Game::new(game_identities, players, LoggerType::Local);
-    // game.play();
-
-    let human_player = HumanPlayer::new(PlayerID(4));
     let mut game = Game::new(game_identities, players, LoggerType::Local);
-    game.setup();
-    human_player.choose_action(&game.state);
+    game.play();
+    // game.setup();
+    // human_player.choose_action(&game.state);
     Ok(())
 }

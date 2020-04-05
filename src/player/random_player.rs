@@ -68,12 +68,11 @@ impl Player for RandomPlayer {
     }
 
     fn choose_forced_coup(&self, state: &GameState) -> PlayerID {
-	for player_id in &state.active_players {
-            if player_id != self.who_am_i() {
-                return player_id.clone();
-            }
-        }
-        panic!("No other players to coup!");
+	let other_players = self.get_other_active_players(state);
+	if other_players.len() < 1 {
+	    panic!("No other players and I was told I have to coup!")
+	}
+	return other_players[0].clone();
     }
 
     
