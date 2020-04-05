@@ -1,8 +1,7 @@
 use crate::player::traits::Player;
 use crate::{Action, GameState, Identity, PlayerID};
-use crate::prompter::{Prompter};
+use crate::prompter::{Prompter, LocalPrompter};
 use anyhow::{anyhow, Result};
-
 
 pub struct HumanPlayer<P: Prompter> {
     // Not necessarily two?
@@ -25,7 +24,7 @@ impl<P: Prompter> HumanPlayer<P> {
 impl<P: Prompter> Player for HumanPlayer<P> {
     fn choose_action(&self, state: &GameState) -> Action {
         let available_actions = self.get_available_actions(state);
-        let action = self.prompter.prompt_player_choice_index("What will you do?", available_actions, Some(state));
+        let action = self.prompter.prompt_player_for_action("What will you do?", available_actions, state);
         match action {
             Ok(action) => action,
             Err(e) => {
@@ -37,9 +36,11 @@ impl<P: Prompter> Player for HumanPlayer<P> {
 
     fn will_challenge(&self, state: &GameState, player_id: &PlayerID, action: &Action) -> bool {
         let question = &format!(
-            "Would you like to challenge {}'s {:?}?",
+            "Would you like to challenge {}'s {}?",
             state.get_player_name(player_id),
-            action
+	    // TODO fix this! I hate that I genericized this but then it doesn't work.
+	    // This should maybe be on game state?
+            LocalPrompter::display_action(state, action.clone())
         );
         match self.prompter.prompt_player_yes_no(question, Some(state)) {
             Ok(x) => x,
@@ -56,8 +57,8 @@ impl<P: Prompter> Player for HumanPlayer<P> {
         player_id: &PlayerID,
         action: &Action,
     ) -> Option<Action> {
+	let possible_actions = action.blockable(self.who_am_i());
         None
-        //action.blockable(self.
     }
     fn choose_card_to_replace(&self, state: &GameState, card: &Identity) -> Option<usize> {
         None

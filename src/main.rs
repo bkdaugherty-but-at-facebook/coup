@@ -16,6 +16,13 @@ use prompter::{LocalPrompter, Prompter};
 use rand::seq::SliceRandom;
 use std::cmp::min;
 use std::collections::HashMap;
+use std::fmt;
+use std::fmt::{Display};
+
+use std::{thread, time};
+
+
+
 
 // TODO Max cards needs to sit with this
 const STARTING_CARDS: u8 = 2;
@@ -86,6 +93,7 @@ pub struct Game {
     driver: GameDriver,
     state: GameState,
     logger: Box<dyn Logger>,
+    interactive: bool
 }
 
 impl Game {
@@ -95,7 +103,6 @@ impl Game {
         players: Vec<PlayerConfig>,
         logger_type: LoggerType,
     ) -> Self {
-        // TODO -> Yuck panic on 0?
         let logger = match logger_type {
             LoggerType::Local => Box::new(LocalLogger {}) as Box<dyn Logger>,
         };
@@ -113,6 +120,7 @@ impl Game {
         let mut state = GameState::new(num_cards, turn_order);
 
         let mut player_id = 0;
+	let mut interactive = false;
         for entry in players {
 	    let id = PlayerID(player_id.clone());
             player_id = player_id + 1;
@@ -123,6 +131,8 @@ impl Game {
                 PlayerType::DumbCPU => Box::new(DumbPlayer::new(id.clone())) as Box<dyn Player>,
                 PlayerType::RandomCPU => Box::new(RandomPlayer::new(id.clone())) as Box<dyn Player>,
                 PlayerType::Local => {
+		    // Existence of local player makes game interactive
+		    interactive = true;
 		    // Overrwrite name for local player
 		    print!("Please enter your name: ");
 		    name = player_prompter.prompt_player(None).unwrap();
@@ -136,11 +146,13 @@ impl Game {
 
             driver.players.insert(id.clone(), player);
         }
+	state.update_turn_order(driver.players.keys().cloned().collect());
 
         Self {
             driver,
             state,
             logger,
+	    interactive,
         }
     }
 
@@ -168,6 +180,18 @@ impl Game {
 
     fn update_active_players(&mut self, player_order: &Vec<PlayerID>) {
         self.state.active_players = self.active_players(player_order);
+    }
+
+    fn wait(&self) {
+	let second = time::Duration::from_millis(1000);
+	let now = time::Instant::now();
+	thread::sleep(second);
+    }
+
+    fn wait_if_interactive(&self) {
+	if self.interactive {
+	    self.wait();
+	}
     }
 
     fn check_for_challenges(
@@ -200,6 +224,15 @@ impl Game {
         self.shuffle();
         self.deal(&turn_order);
         self.update_active_players(&turn_order);
+
+	// TODO --> Remove / detect if interactive mode.
+	// Could check for local players?
+	println!("Let the game begin!");
+	print!("The turn order is as follows: ");
+	for player in &turn_order {
+	    print!("{} ", self.state.get_player_name(player));
+	}
+	println!("");
     }
 
     pub fn play(&mut self) {
@@ -210,6 +243,11 @@ impl Game {
             // Need to check game over everytime state changes. --> Sad
             let active_players = &self.active_players(&turn_order);
             for active_id in active_players {
+		self.logger.log(format!(
+		    "{}'s turn!", self.state.get_player_name(active_id))
+				
+		);
+		self.wait_if_interactive();
                 let player = self.driver.players.get(active_id).unwrap();
 
                 // Enforce Required Coup
@@ -221,9 +259,9 @@ impl Game {
 
                 self.logger.log(
                     format!(
-                        "{} chose action {:?}",
+                        "{} chose action {}",
                         self.get_player_name(active_id),
-                        action
+                        LocalPrompter::display_action(&self.state, action.clone())
                     )
                     .to_string(),
                 );
@@ -247,11 +285,11 @@ impl Game {
                         {
                             // blocker block
                             self.logger.log(format!(
-                                "{} is blocking {}'s {:?} with {:?}",
+                                "{} is blocking {}'s {} with {}",
                                 self.get_player_name(blocker_id),
                                 self.get_player_name(active_id),
-                                action,
-                                blocking_action
+                                LocalPrompter::display_action(&self.state, action.clone()),
+                                LocalPrompter::display_action(&self.state, blocking_action.clone()),
                             ));
                             if let Some(challenge) =
                                 self.check_for_challenges(blocker_id, &turn_order, &blocking_action)
@@ -297,10 +335,10 @@ impl Game {
         let action = &challenge.action;
 
         self.logger.log(format!(
-            "{} is challenging {}'s {:?}",
+            "{} is challenging {}'s {}",
             self.get_player_name(challenger_id),
             self.get_player_name(actor_id),
-            action
+            LocalPrompter::display_action(&self.state, action.clone())
         ));
 
         let mut winner_id = actor_id;
@@ -426,6 +464,25 @@ impl Game {
     }
 }
 
+impl fmt::Display for GameState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	// Print Player States
+	for player in &self.turn_order {
+	    let player_state = self.player_states.get(player);
+	    match player_state {
+		Some(player_state) => {
+		    println!("{}", player_state);
+		},
+		None => {
+		    panic!("Turn order and player states out of sync")
+		}
+	    }
+	}
+	Ok(())
+    }
+}
+
+
 impl GameState {
     fn new(num_cards: u8, turn_order: Vec<PlayerID>) -> Self {
         let player_states = HashMap::new();
@@ -438,6 +495,9 @@ impl GameState {
     }
     fn get_player_name(&self, player_id: &PlayerID) -> String {
         self.player_states.get(&player_id).unwrap().get_name()
+    }
+    fn update_turn_order(&mut self, turn_order: Vec<PlayerID>) {
+	self.turn_order = turn_order;
     }
 }
 
@@ -459,6 +519,24 @@ pub struct PlayerState {
     num_lives: u8,
 }
 
+impl fmt::Display for PlayerState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	write!(f, "{}:\n", self.player_name);
+	write!(f, "\tLives: {}\n", self.num_lives);
+	write!(f, "\tCoins: {}\n", self.num_coins);
+	if self.lost_lives.len() > 0 {
+	    write!(f, "\tLost Identities: ");
+	    for life in &self.lost_lives {
+		write!(f, "{:?} ", life);
+	    }
+	    write!(f, "\n");
+	}
+	Ok(())
+    }
+ 
+}
+
+
 impl PlayerState {
     pub fn new(player_name: String, num_lives: u8) -> Self {
         let lost_lives = Vec::new();
@@ -479,7 +557,7 @@ impl PlayerState {
 }
 
 // Can be used for cards as well?
-#[derive(Debug, EnumSetType)]
+#[derive(Debug,  EnumSetType)]
 pub enum Identity {
     Ambassador,
     Assassin,
