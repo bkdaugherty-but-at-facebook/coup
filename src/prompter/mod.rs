@@ -6,6 +6,7 @@ use std::io::{stdin, stdout, Write};
 use std::str::FromStr;
 
 // Defines a temporary struct used to model a players state when prompted
+#[derive(Clone)]
 pub struct PromptInfo<'a> {
     pub state: &'a GameState,
     pub player_hand: Vec<Identity>,
@@ -44,12 +45,12 @@ const NO: &[&str] = &[
 
 pub trait Prompter {
     fn prompt_player(&self, prompt_info: Option<PromptInfo>) -> Result<String>;
-    fn prompt_player_choice<T: Display + FromStr + Clone>(
+    fn prompt_player_choice<T: Display  + Clone>(
         &self,
         question: &str,
         possible_choices: Vec<T>,
         state: Option<PromptInfo>
-    ) -> Result<T>;
+    ) -> Result<usize>;
     fn prompt_player_for_action(
         &self,
         question: &str,
@@ -70,11 +71,19 @@ pub trait Prompter {
     }
 }
 
-pub struct LocalPrompter {}
+pub struct LocalPrompter {
+    player_name: String
+}
 
 impl LocalPrompter {
     pub fn new() -> Self {
-        LocalPrompter {}
+        LocalPrompter {
+	    player_name: "".to_string()
+	}
+    }
+
+    pub fn set_name(&mut self, player_name: String) {
+	self.player_name = player_name;
     }
 
     fn get_response(&self) -> Result<String> {
@@ -136,20 +145,20 @@ impl Prompter for LocalPrompter {
 
     // TODO this is garbage
     // This could take an acceptance function as a new parameter.
-    fn prompt_player_choice<T: Display + FromStr + Clone>(
+    fn prompt_player_choice<T: Display + Clone>(
         &self,
         question: &str,
         possible_choices: Vec<T>,
 	prompt_info: Option<PromptInfo>
-    ) -> Result<T> {
+    ) -> Result<usize> {
         println!("{}", question);
         print!("Choices are: [");
-        for choice in possible_choices {
-            print!(" {}", choice);
+        for (idx, choice) in possible_choices.iter().enumerate() {
+            print!("\t{} => {}", idx, choice);
         }
         println!(" ]");
         match self.prompt_player(prompt_info) {
-            Ok(response) => match T::from_str(&response) {
+            Ok(response) => match usize::from_str(&response) {
                 Ok(response) => Ok(response),
                 Err(e) => Err(anyhow!("Unable to convert {} ", response)),
             },
@@ -165,7 +174,7 @@ impl Prompter for LocalPrompter {
 	prompt_info: PromptInfo
     ) -> Result<Action> {
 	let state = prompt_info.state;
-	println!("{}", question);
+	println!("{}: {}", self.player_name, question);
         println!("Choices are: [");
         for (idx, choice) in possible_choices.iter().enumerate() {
             println!("\t{} => {}", idx, LocalPrompter::display_action(state, choice.clone()));
@@ -186,7 +195,7 @@ impl Prompter for LocalPrompter {
         }
     }
     fn prompt_player_yes_no(&self, question: &str, prompt_info: Option<PromptInfo>) -> Result<bool> {
-        println!("{} (y/n)", question);
+        println!("{}: {} (y/n)", self.player_name, question);
         let choice = self.prompt_player(prompt_info);
         match choice {
             Ok(choice) => {

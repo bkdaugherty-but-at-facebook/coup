@@ -87,7 +87,7 @@ pub trait Player {
 
     // Hm is enums with values an anti-pattern? fuq
     fn get_available_actions(&self, state: &GameState) -> Vec<Action> {
-	let mut available_actions = vec!(Action::Income, Action::ForeignAid, Action::Tax);
+	let mut available_actions = vec!(Action::Income, Action::ForeignAid, Action::Tax, Action::Exchange);
 	for target in &state.active_players {
 	    if target != self.who_am_i() {
 		available_actions.push(Action::Steal(target.clone()));

@@ -5,6 +5,7 @@ mod prompter;
 
 use action::Action;
 use anyhow::Result;
+use structopt::clap::arg_enum;
 use enumset::{EnumSet, EnumSetType};
 use logger::local_logger::LocalLogger;
 use logger::traits::Logger;
@@ -18,14 +19,11 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display};
+use structopt::StructOpt;
 
 use std::{thread, time};
 
-// TODO Max cards needs to sit with this
-const STARTING_CARDS: u8 = 2;
-const STARTING_COINS: u8 = 2;
-const STARTING_LIVES: u8 = 2;
-const REQUIRE_COUP_COINS: u8 = 10;
+
 // TODO if num_lives > num_cards just reduce num_lives
 
 // Game change turns
@@ -61,7 +59,7 @@ impl PlayerConfig {
     fn new(player_type: PlayerType, player_name: String) -> Self {
         PlayerConfig {
             player_type,
-            player_name,
+	    player_name,
         }
     }
 }
@@ -122,7 +120,6 @@ impl Game {
 	    let id = PlayerID(player_id.clone());
             player_id = player_id + 1;
 	    let mut name = entry.player_name;
-	    let player_prompter = LocalPrompter::new();
             // Create Player
             let player = match entry.player_type {
                 PlayerType::DumbCPU => Box::new(DumbPlayer::new(id.clone())) as Box<dyn Player>,
@@ -131,8 +128,10 @@ impl Game {
 		    // Existence of local player makes game interactive
 		    interactive = true;
 		    // Overrwrite name for local player
-		    print!("Creating a new Local Player!\nPlease enter your name: ");
+		    let mut player_prompter = LocalPrompter::new();
+		    println!("Creating a new local player!\nPlease enter your name:");
 		    name = player_prompter.prompt_player(None).unwrap();
+		    player_prompter.set_name(name.clone());
 		    Box::new(HumanPlayer::new(id.clone(), player_prompter)) as Box<dyn Player>
 		}
             };
@@ -558,6 +557,7 @@ impl PlayerState {
 }
 
 // Can be used for cards as well?
+arg_enum! {
 #[derive(Debug,  EnumSetType)]
 pub enum Identity {
     Ambassador,
@@ -566,6 +566,7 @@ pub enum Identity {
     Captain,
     // Inquisitor,
     Duke,
+}
 }
 
 pub struct GameField {
@@ -604,20 +605,62 @@ impl log::Log for SimpleLogger {
 
 static LOGGER: SimpleLogger = SimpleLogger;
 
+// TODO Max cards needs to sit with this
+const STARTING_CARDS: u8 = 2;
+const STARTING_COINS: u8 = 2;
+const STARTING_LIVES: u8 = 2;
+const REQUIRE_COUP_COINS: u8 = 10;
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "Coup Simulator CLI", setting = structopt::clap::AppSettings::ColoredHelp)]
+struct GameConfig {
+    /// The Identitites to use for this game
+    #[structopt(long, possible_values = &Identity::variants(), value_delimiter = ",", default_value = "Ambassador,Assassin,Contessa,Captain,Duke")] //default_value = "Ambassador Assassin Contessa Captain Duke")]
+    game_identities: Vec<Identity>,
+    /// The number of cards each player begins the game with
+    #[structopt(long, default_value = "2")]
+    starting_cards: u8,
+    /// The number of coins each player begins the game with
+    #[structopt(long, default_value = "2")]
+    starting_coins: u8,
+    /// The number of lives each player begins the game with
+    #[structopt(long, default_value = "2")]
+    starting_lives: u8,
+    /// The limit on the amount of coins each player starts with
+    #[structopt(long, default_value = "10")]
+    required_coup_coins: u8,
+    /// The number of local players in this simulation
+    #[structopt(long, default_value = "1")]
+    num_local_players: u8,
+    /// The names of the Random CPUS in this simulation
+    #[structopt(long, value_delimiter = ",", default_value = "Porter,Miela")]
+    random_cpus: Vec<String>,
+    /// The names of the Dumb CPUS in this simulation
+    #[structopt(long, value_delimiter = ",", default_value = "Don")]
+    dumb_cpus: Vec<String>
+    
+
+}
+
 fn main() -> Result<()> {
     log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info));
 
-    let game_identities = Identity::Ambassador
-        | Identity::Assassin
-        | Identity::Contessa
-        | Identity::Captain
-        | Identity::Duke;
-    let players = vec![
-        PlayerConfig::new(PlayerType::DumbCPU, "Charlie".to_string()),
-        PlayerConfig::new(PlayerType::RandomCPU, "Miela".to_string()),
-        PlayerConfig::new(PlayerType::RandomCPU, "Porter".to_string()),
-        PlayerConfig::new(PlayerType::Local, "Brendon".to_string()),
-    ];
+    let config = GameConfig::from_args();
+    
+    let game_identities : EnumSet<Identity> = config.game_identities.into_iter().collect();
+    let mut players = Vec::new();
+    for cpu in &config.dumb_cpus {
+	players.push(PlayerConfig::new(PlayerType::DumbCPU, cpu.clone()));
+    }
+
+    for cpu in &config.random_cpus {
+	players.push(PlayerConfig::new(PlayerType::RandomCPU, cpu.clone()));
+    }
+
+    for player in 0..config.num_local_players {
+	// TODO make name optional / not needed for local player config
+	players.push(PlayerConfig::new(PlayerType::Local, "".to_string()));
+    }
     let mut game = Game::new(game_identities, players, LoggerType::Local);
     game.play();
     // game.setup();
